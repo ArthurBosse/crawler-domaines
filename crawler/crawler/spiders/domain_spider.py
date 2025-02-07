@@ -4,6 +4,7 @@ import dns.resolver
 import aiohttp
 from datetime import datetime
 from supabase import create_client, Client
+import asyncio
 
 class DomainSpider(scrapy.Spider):
     name = "domain_crawler"
@@ -25,7 +26,7 @@ class DomainSpider(scrapy.Spider):
             'ROBOTSTXT_OBEY': True,
         }
 
-    async def check_domain_status(self, domain):
+    def check_domain_status(self, domain):
         # Vérification DNS
         try:
             dns_result = dns.resolver.resolve(domain, 'A')
@@ -35,9 +36,10 @@ class DomainSpider(scrapy.Spider):
 
         # Vérification HTTP
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f'http://{domain}', timeout=10) as response:
-                    http_status = response.status
+            # Utilisation de requests au lieu de aiohttp pour la simplicité
+            import requests
+            response = requests.get(f'http://{domain}', timeout=10)
+            http_status = response.status_code
         except Exception as e:
             http_status = str(e)
 
@@ -57,7 +59,7 @@ class DomainSpider(scrapy.Spider):
                     self.visited_urls.add(domain)
                     
                     # Vérification du domaine
-                    http_status, dns_status = await self.check_domain_status(domain)
+                    http_status, dns_status = self.check_domain_status(domain)
                     
                     # Enregistrement dans Supabase
                     data = {
