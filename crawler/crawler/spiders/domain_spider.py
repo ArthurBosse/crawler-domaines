@@ -17,10 +17,25 @@ class DomainSpider(scrapy.Spider):
         # Chargement des variables d'environnement
         load_dotenv()
         
-        # Initialisation de Supabase avec une version plus ancienne
-        supabase_url = os.getenv('SUPABASE_URL', "https://rtvnevavydjycfwoxatd.supabase.co")
-        supabase_key = os.getenv('SUPABASE_KEY', "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0dm5ldmF2eWRqeWNmd294YXRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg3OTYyMTgsImV4cCI6MjA1NDM3MjIxOH0.uwZPcBmLPNgmhm6xoKc2HPWtqUTY0VGaJscZ7l9HfKE")
+        # Initialisation de Supabase
+        supabase_url = os.getenv('SUPABASE_URL')
+        supabase_key = os.getenv('SUPABASE_KEY')
+        
+        # Initialisation avec authentification
         self.supabase = create_client(supabase_url, supabase_key)
+        
+        # Authentification avec un compte de service
+        email = os.getenv('SUPABASE_USER_EMAIL')
+        password = os.getenv('SUPABASE_USER_PASSWORD')
+        
+        try:
+            self.supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            self.logger.info("Authentification Supabase réussie")
+        except Exception as e:
+            self.logger.error(f"Erreur d'authentification Supabase: {str(e)}")
         
         # Configuration du crawler
         self.custom_settings = {
@@ -72,9 +87,11 @@ class DomainSpider(scrapy.Spider):
                         'date_scan': datetime.now().isoformat()
                     }
                     
-                    self.supabase.table('domaines').insert(data).execute()
-                    
-                    self.logger.info(f'Domain checked: {domain} - HTTP: {http_status}, DNS: {dns_status}')
+                    try:
+                        self.supabase.table('domaines').insert(data).execute()
+                        self.logger.info(f'Domain checked: {domain} - HTTP: {http_status}, DNS: {dns_status}')
+                    except Exception as e:
+                        self.logger.error(f'Erreur Supabase pour {domain}: {str(e)}')
 
                     # Suivre le lien s'il est sur le même domaine
                     if domain == urlparse(current_url).netloc:
