@@ -5,6 +5,10 @@ from datetime import datetime
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
+from colorama import init, Fore, Style
+
+# Initialisation de colorama
+init(autoreset=True)
 
 class DomainSpider(scrapy.Spider):
     name = "domain_crawler"
@@ -22,7 +26,7 @@ class DomainSpider(scrapy.Spider):
         supabase_key = os.getenv('SUPABASE_KEY')
         
         if not supabase_url or not supabase_key:
-            self.logger.error("URLs ou clés Supabase manquantes")
+            self.logger.error(f"{Fore.RED}URLs ou clés Supabase manquantes{Style.RESET_ALL}")
             return
             
         # Initialisation avec authentification
@@ -33,7 +37,7 @@ class DomainSpider(scrapy.Spider):
         password = os.getenv('SUPABASE_USER_PASSWORD')
         
         if not email or not password:
-            self.logger.error("Credentials d'authentification manquants")
+            self.logger.error(f"{Fore.RED}Credentials d'authentification manquants{Style.RESET_ALL}")
             return
             
         try:
@@ -42,7 +46,7 @@ class DomainSpider(scrapy.Spider):
                 "password": password
             })
             self.access_token = auth_response.session.access_token
-            self.logger.info("Authentification Supabase réussie")
+            self.logger.info(f"{Fore.GREEN}Authentification Supabase réussie{Style.RESET_ALL}")
             self.logger.info(f"Session expiration: {auth_response.session.expires_at}")
             self.logger.info(f"User ID: {auth_response.user.id}")
             
@@ -50,7 +54,7 @@ class DomainSpider(scrapy.Spider):
             self.supabase.postgrest.auth(self.access_token)
             
         except Exception as e:
-            self.logger.error(f"Erreur d'authentification Supabase: {str(e)}")
+            self.logger.error(f"{Fore.RED}Erreur d'authentification Supabase: {str(e)}{Style.RESET_ALL}")
         
         # Configuration du crawler
         self.custom_settings = {
@@ -79,14 +83,16 @@ class DomainSpider(scrapy.Spider):
 
     def parse(self, response):
         current_url = response.url
-        self.logger.info(f'Crawling: {current_url}')
+        self.logger.info(f'{Fore.CYAN}Crawling: {current_url}{Style.RESET_ALL}')
 
-        # Extraction des liens externes
+        # Extraction des liens
         for href in response.css('a::attr(href)').getall():
             try:
-                parsed_url = urlparse(response.urljoin(href))
+                absolute_url = response.urljoin(href)
+                parsed_url = urlparse(absolute_url)
                 domain = parsed_url.netloc
 
+                # Vérification du domaine externe
                 if domain and domain not in self.visited_urls:
                     self.visited_urls.add(domain)
                     
@@ -105,24 +111,26 @@ class DomainSpider(scrapy.Spider):
                     try:
                         self.logger.info(f"Tentative d'insertion pour {domain} avec token: {self.access_token[:10]}...")
                         result = self.supabase.table('domaines').insert(data).execute()
-                        self.logger.info(f'Domain checked and inserted: {domain} - HTTP: {http_status}, DNS: {dns_status}')
+                        self.logger.info(f'{Fore.GREEN}Domain checked and inserted: {domain} - HTTP: {http_status}, DNS: {dns_status}{Style.RESET_ALL}')
                     except Exception as e:
-                        self.logger.error(f'Erreur Supabase pour {domain}: {str(e)}')
-                        # Tentative de rafraîchissement du token
+                        self.logger.error(f'{Fore.RED}Erreur Supabase pour {domain}: {str(e)}{Style.RESET_ALL}')
                         try:
                             session = self.supabase.auth.get_session()
                             if session:
                                 self.access_token = session.access_token
                                 self.supabase.postgrest.auth(self.access_token)
-                                self.logger.info("Token rafraîchi, nouvelle tentative d'insertion...")
+                                self.logger.info(f"{Fore.YELLOW}Token rafraîchi, nouvelle tentative d'insertion...{Style.RESET_ALL}")
                                 result = self.supabase.table('domaines').insert(data).execute()
-                                self.logger.info(f'Domain inserted after token refresh: {domain}')
+                                self.logger.info(f'{Fore.GREEN}Domain inserted after token refresh: {domain}{Style.RESET_ALL}')
                         except Exception as refresh_error:
-                            self.logger.error(f'Erreur de rafraîchissement du token: {str(refresh_error)}')
+                            self.logger.error(f'{Fore.RED}Erreur de rafraîchissement du token: {str(refresh_error)}{Style.RESET_ALL}')
 
-                    # Suivre le lien s'il est sur le même domaine
-                    if domain == urlparse(current_url).netloc:
-                        yield response.follow(href, self.parse)
+                # Suivre tous les liens du même domaine de départ
+                start_domain = urlparse(self.start_urls[0]).netloc
+                if parsed_url.netloc == start_domain and absolute_url not in self.visited_urls:
+                    self.visited_urls.add(absolute_url)
+                    self.logger.info(f'{Fore.YELLOW}Following link: {absolute_url}{Style.RESET_ALL}')
+                    yield response.follow(absolute_url, self.parse)
                         
             except Exception as e:
-                self.logger.error(f'Error processing URL {href}: {str(e)}')
+                self.logger.error(f'{Fore.RED}Error processing URL {href}: {str(e)}{Style.RESET_ALL}')
