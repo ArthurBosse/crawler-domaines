@@ -1,10 +1,10 @@
 import scrapy
 from urllib.parse import urlparse
 import dns.resolver
-import aiohttp
 from datetime import datetime
 from supabase import create_client, Client
-import asyncio
+import os
+from dotenv import load_dotenv
 
 class DomainSpider(scrapy.Spider):
     name = "domain_crawler"
@@ -14,10 +14,13 @@ class DomainSpider(scrapy.Spider):
         self.start_urls = [start_url] if start_url else []
         self.visited_urls = set()
         
-        # Initialisation de Supabase
-        supabase_url = "https://rtvnevavydjycfwoxatd.supabase.co"
-        supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0dm5ldmF2eWRqeWNmd294YXRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg3OTYyMTgsImV4cCI6MjA1NDM3MjIxOH0.uwZPcBmLPNgmhm6xoKc2HPWtqUTY0VGaJscZ7l9HfKE"
-        self.supabase: Client = create_client(supabase_url, supabase_key)
+        # Chargement des variables d'environnement
+        load_dotenv()
+        
+        # Initialisation de Supabase avec une version plus ancienne
+        supabase_url = os.getenv('SUPABASE_URL', "https://rtvnevavydjycfwoxatd.supabase.co")
+        supabase_key = os.getenv('SUPABASE_KEY', "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0dm5ldmF2eWRqeWNmd294YXRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg3OTYyMTgsImV4cCI6MjA1NDM3MjIxOH0.uwZPcBmLPNgmhm6xoKc2HPWtqUTY0VGaJscZ7l9HfKE")
+        self.supabase = create_client(supabase_url, supabase_key)
         
         # Configuration du crawler
         self.custom_settings = {
@@ -36,7 +39,6 @@ class DomainSpider(scrapy.Spider):
 
         # Vérification HTTP
         try:
-            # Utilisation de requests au lieu de aiohttp pour la simplicité
             import requests
             response = requests.get(f'http://{domain}', timeout=10)
             http_status = response.status_code
