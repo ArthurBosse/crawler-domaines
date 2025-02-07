@@ -68,7 +68,7 @@ class DomainSpider(scrapy.Spider):
         
         # Configuration du crawler
         self.custom_settings = {
-            'CONCURRENT_REQUESTS': 100,
+            'CONCURRENT_REQUESTS': 16,
             'DOWNLOAD_DELAY': 1,
             'ROBOTSTXT_OBEY': True,
         }
@@ -84,7 +84,7 @@ class DomainSpider(scrapy.Spider):
         # Handler pour le fichier de log avec rotation
         file_handler = RotatingFileHandler(
             'logs/crawler.log',
-            maxBytes=100*1024*1024,  # 10MB
+            maxBytes=10*1024*1024,  # 10MB
             backupCount=5,
             encoding='utf-8'
         )
@@ -113,7 +113,9 @@ class DomainSpider(scrapy.Spider):
             response = requests.get(f'http://{domain}', timeout=10)
             http_status = response.status_code
         except Exception as e:
-            http_status = str(e)
+            # En cas d'erreur, on retourne -1 pour le status HTTP
+            http_status = -1
+            dns_status = str(e)
 
         return http_status, dns_status
 
@@ -155,7 +157,7 @@ class DomainSpider(scrapy.Spider):
                     data = {
                         'url_source': current_url,
                         'domaine_externe': domain,
-                        'status_http': str(http_status),
+                        'status_http': http_status,  # Maintenant c'est toujours un entier
                         'statut_dns': dns_status,
                         'date_scan': datetime.now().isoformat()
                     }
