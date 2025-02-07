@@ -21,6 +21,10 @@ class DomainSpider(scrapy.Spider):
         supabase_url = os.getenv('SUPABASE_URL')
         supabase_key = os.getenv('SUPABASE_KEY')
         
+        if not supabase_url or not supabase_key:
+            self.logger.error("URLs ou clés Supabase manquantes")
+            return
+            
         # Initialisation avec authentification
         self.supabase = create_client(supabase_url, supabase_key)
         
@@ -28,12 +32,18 @@ class DomainSpider(scrapy.Spider):
         email = os.getenv('SUPABASE_USER_EMAIL')
         password = os.getenv('SUPABASE_USER_PASSWORD')
         
+        if not email or not password:
+            self.logger.error("Credentials d'authentification manquants")
+            return
+            
         try:
-            self.supabase.auth.sign_in_with_password({
+            auth_response = self.supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
             })
             self.logger.info("Authentification Supabase réussie")
+            self.logger.info(f"Session expiration: {auth_response.session.expires_at}")
+            self.logger.info(f"User ID: {auth_response.user.id}")
         except Exception as e:
             self.logger.error(f"Erreur d'authentification Supabase: {str(e)}")
         
@@ -88,8 +98,14 @@ class DomainSpider(scrapy.Spider):
                     }
                     
                     try:
-                        self.supabase.table('domaines').insert(data).execute()
-                        self.logger.info(f'Domain checked: {domain} - HTTP: {http_status}, DNS: {dns_status}')
+                        # Vérification de l'état de l'authentification avant l'insertion
+                        session = self.supabase.auth.get_session()
+                        if session:
+                            self.logger.info(f"Tentative d'insertion avec token valide pour {domain}")
+                            result = self.supabase.table('domaines').insert(data).execute()
+                            self.logger.info(f'Domain checked and inserted: {domain} - HTTP: {http_status}, DNS: {dns_status}')
+                        else:
+                            self.logger.error(f"Session invalide lors de l'insertion pour {domain}")
                     except Exception as e:
                         self.logger.error(f'Erreur Supabase pour {domain}: {str(e)}')
 
