@@ -1,5 +1,5 @@
 import scrapy
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urldefrag
 import dns.resolver
 from datetime import datetime
 from supabase import create_client, Client
@@ -88,8 +88,15 @@ class DomainSpider(scrapy.Spider):
         # Extraction des liens
         for href in response.css('a::attr(href)').getall():
             try:
-                absolute_url = response.urljoin(href)
-                parsed_url = urlparse(absolute_url)
+                # Supprimer l'ancre de l'URL
+                url_without_fragment, _ = urldefrag(response.urljoin(href))
+                
+                # Si l'URL contient une ancre, on l'ignore
+                if '#' in href:
+                    self.logger.info(f'{Fore.YELLOW}Ignoring anchored URL: {href}{Style.RESET_ALL}')
+                    continue
+                
+                parsed_url = urlparse(url_without_fragment)
                 domain = parsed_url.netloc
 
                 # Vérification du domaine externe
@@ -127,10 +134,10 @@ class DomainSpider(scrapy.Spider):
 
                 # Suivre tous les liens du même domaine de départ
                 start_domain = urlparse(self.start_urls[0]).netloc
-                if parsed_url.netloc == start_domain and absolute_url not in self.visited_urls:
-                    self.visited_urls.add(absolute_url)
-                    self.logger.info(f'{Fore.YELLOW}Following link: {absolute_url}{Style.RESET_ALL}')
-                    yield response.follow(absolute_url, self.parse)
+                if parsed_url.netloc == start_domain and url_without_fragment not in self.visited_urls:
+                    self.visited_urls.add(url_without_fragment)
+                    self.logger.info(f'{Fore.YELLOW}Following link: {url_without_fragment}{Style.RESET_ALL}')
+                    yield response.follow(url_without_fragment, self.parse)
                         
             except Exception as e:
                 self.logger.error(f'{Fore.RED}Error processing URL {href}: {str(e)}{Style.RESET_ALL}')
