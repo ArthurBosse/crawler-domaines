@@ -41,9 +41,14 @@ class DomainSpider(scrapy.Spider):
                 "email": email,
                 "password": password
             })
+            self.access_token = auth_response.session.access_token
             self.logger.info("Authentification Supabase réussie")
             self.logger.info(f"Session expiration: {auth_response.session.expires_at}")
             self.logger.info(f"User ID: {auth_response.user.id}")
+            
+            # Configuration du client avec le token d'accès
+            self.supabase.postgrest.auth(self.access_token)
+            
         except Exception as e:
             self.logger.error(f"Erreur d'authentification Supabase: {str(e)}")
         
@@ -98,16 +103,22 @@ class DomainSpider(scrapy.Spider):
                     }
                     
                     try:
-                        # Vérification de l'état de l'authentification avant l'insertion
-                        session = self.supabase.auth.get_session()
-                        if session:
-                            self.logger.info(f"Tentative d'insertion avec token valide pour {domain}")
-                            result = self.supabase.table('domaines').insert(data).execute()
-                            self.logger.info(f'Domain checked and inserted: {domain} - HTTP: {http_status}, DNS: {dns_status}')
-                        else:
-                            self.logger.error(f"Session invalide lors de l'insertion pour {domain}")
+                        self.logger.info(f"Tentative d'insertion pour {domain} avec token: {self.access_token[:10]}...")
+                        result = self.supabase.table('domaines').insert(data).execute()
+                        self.logger.info(f'Domain checked and inserted: {domain} - HTTP: {http_status}, DNS: {dns_status}')
                     except Exception as e:
                         self.logger.error(f'Erreur Supabase pour {domain}: {str(e)}')
+                        # Tentative de rafraîchissement du token
+                        try:
+                            session = self.supabase.auth.get_session()
+                            if session:
+                                self.access_token = session.access_token
+                                self.supabase.postgrest.auth(self.access_token)
+                                self.logger.info("Token rafraîchi, nouvelle tentative d'insertion...")
+                                result = self.supabase.table('domaines').insert(data).execute()
+                                self.logger.info(f'Domain inserted after token refresh: {domain}')
+                        except Exception as refresh_error:
+                            self.logger.error(f'Erreur de rafraîchissement du token: {str(refresh_error)}')
 
                     # Suivre le lien s'il est sur le même domaine
                     if domain == urlparse(current_url).netloc:
